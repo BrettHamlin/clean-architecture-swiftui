@@ -137,6 +137,25 @@ import SwiftUI
         }
     }
 
+    @Test func favoritesToolbarButtonUsesShowFavoritesLabel() async throws {
+        // harness:criterion=c-countries-list-toolbar-filter-button-present,c-countries-list-tests-toolbar-button-present
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect(after: .seconds(0.2)) { view in
+                let button = try view.favoriteFilterButton()
+                #expect(throws: Never.self) {
+                    try button.labelView().find(text: "Show Favorites")
+                }
+                container.interactors.verify()
+            }
+        }
+    }
+
     @Test func favoritesToolbarButtonTogglesFilterState() async throws {
         // harness:criterion=c-countries-list-toolbar-toggle-changes-state,c-countries-list-tests-filter-toggle-state
         let container = DIContainer(interactors: .mocked())

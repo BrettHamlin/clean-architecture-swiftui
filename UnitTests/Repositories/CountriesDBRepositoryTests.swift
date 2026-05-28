@@ -8,6 +8,7 @@
 
 import Testing
 import SwiftData
+import Foundation
 @testable import CountriesSwiftUI
 
 @MainActor

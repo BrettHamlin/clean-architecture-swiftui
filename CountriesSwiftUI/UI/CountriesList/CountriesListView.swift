@@ -9,6 +9,7 @@
 import SwiftUI
 import SwiftData
 import Combine
+import Foundation
 
 struct CountriesList: View {
 
