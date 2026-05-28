@@ -16,6 +16,7 @@ struct CountriesList: View {
     @State private(set) var countriesState: Loadable<Void>
     @State private var canRequestPushPermission: Bool = false
     @State internal var searchText = ""
+    @State internal var sortOrder: SortOrder = .alphabetical
     @State internal var navigationPath = NavigationPath()
     @State private var routingState: Routing = .init()
     private var routingBinding: Binding<Routing> {
@@ -34,14 +35,8 @@ struct CountriesList: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             content
-                .query(searchText: searchText, results: $countries, { search in
-                    Query(filter: #Predicate<DBModel.Country> { country in
-                        if search.isEmpty {
-                            return true
-                        } else {
-                            return country.name.localizedStandardContains(search)
-                        }
-                    }, sort: \DBModel.Country.name)
+                .query(searchText: searchText, sortOrder: sortOrder, results: $countries, { search, sortOrder in
+                    Query(filter: Self.searchPredicate(search), sort: sortOrder.sortDescriptors)
                 })
                 .navigationTitle("Countries")
         }
@@ -120,6 +115,12 @@ private extension CountriesList {
         }
         .toolbar {
             ToolbarItem {
+                Button(action: toggleSortOrder) {
+                    Label(sortOrder.toolbarTitle, systemImage: sortOrder.toolbarSystemImage)
+                }
+                .accessibilityIdentifier("countries.sort.toggle")
+            }
+            ToolbarItem {
                 permissionsButton
             }
         }
@@ -153,11 +154,71 @@ private extension CountriesList {
         injected.interactors.userPermissions
             .request(permission: .pushNotifications)
     }
+
+    private func toggleSortOrder() {
+        sortOrder.toggle()
+    }
 }
 
 // MARK: - Routing
 
 extension CountriesList {
+
+    enum SortOrder: Equatable {
+        case alphabetical
+        case populationDescending
+
+        var sortDescriptors: [SortDescriptor<DBModel.Country>] {
+            switch self {
+            case .alphabetical:
+                return [SortDescriptor(\DBModel.Country.name, order: .forward)]
+            case .populationDescending:
+                return [SortDescriptor(\DBModel.Country.population, order: .reverse)]
+            }
+        }
+
+        var toolbarTitle: String {
+            switch self {
+            case .alphabetical:
+                return "Sort by Population"
+            case .populationDescending:
+                return "Sort Alphabetically"
+            }
+        }
+
+        var toolbarSystemImage: String {
+            switch self {
+            case .alphabetical:
+                return "person.3.sequence"
+            case .populationDescending:
+                return "textformat.abc"
+            }
+        }
+
+        mutating func toggle() {
+            switch self {
+            case .alphabetical:
+                self = .populationDescending
+            case .populationDescending:
+                self = .alphabetical
+            }
+        }
+    }
+
+    static func searchPredicate(_ searchText: String) -> Predicate<DBModel.Country> {
+        #Predicate<DBModel.Country> { country in
+            if searchText.isEmpty {
+                return true
+            } else {
+                return country.name.localizedStandardContains(searchText)
+            }
+        }
+    }
+
+    static func fetchDescriptor(searchText: String, sortOrder: SortOrder) -> FetchDescriptor<DBModel.Country> {
+        FetchDescriptor(predicate: searchPredicate(searchText), sortBy: sortOrder.sortDescriptors)
+    }
+
     struct Routing: Equatable {
         var countryCode: String?
     }
