@@ -17,6 +17,7 @@ struct CountriesList: View {
     @State private var canRequestPushPermission: Bool = false
     @State internal var searchText = ""
     @State internal var navigationPath = NavigationPath()
+    @State internal var sortOrder: SortOrder = .alphabetical
     @State private var routingState: Routing = .init()
     private var routingBinding: Binding<Routing> {
         $routingState.dispatched(to: injected.appState, \.routing.countriesList)
@@ -34,15 +35,15 @@ struct CountriesList: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             content
-                .query(searchText: searchText, results: $countries, { search in
+                .query(searchText: searchText, results: $countries, sortOrder: sortOrder) { search, sortOrder in
                     Query(filter: #Predicate<DBModel.Country> { country in
                         if search.isEmpty {
                             return true
                         } else {
                             return country.name.localizedStandardContains(search)
                         }
-                    }, sort: \DBModel.Country.name)
-                })
+                    }, sort: sortOrder.sortDescriptors)
+                }
                 .navigationTitle("Countries")
         }
         .modifier(LocaleReader(container: localeContainer))
@@ -120,6 +121,11 @@ private extension CountriesList {
         }
         .toolbar {
             ToolbarItem {
+                Button(action: toggleSortOrder, label: {
+                    Text(sortOrder.buttonTitle)
+                })
+            }
+            ToolbarItem {
                 permissionsButton
             }
         }
@@ -153,11 +159,47 @@ private extension CountriesList {
         injected.interactors.userPermissions
             .request(permission: .pushNotifications)
     }
+
+    private func toggleSortOrder() {
+        sortOrder.toggle()
+    }
 }
 
 // MARK: - Routing
 
 extension CountriesList {
+    enum SortOrder: Equatable {
+        case alphabetical
+        case byPopulation
+
+        var sortDescriptors: [SortDescriptor<DBModel.Country>] {
+            switch self {
+            case .alphabetical:
+                return [SortDescriptor(\DBModel.Country.name)]
+            case .byPopulation:
+                return [SortDescriptor(\DBModel.Country.population, order: .reverse)]
+            }
+        }
+
+        var buttonTitle: String {
+            switch self {
+            case .alphabetical:
+                return "Sort by Population"
+            case .byPopulation:
+                return "Sort Alphabetically"
+            }
+        }
+
+        mutating func toggle() {
+            switch self {
+            case .alphabetical:
+                self = .byPopulation
+            case .byPopulation:
+                self = .alphabetical
+            }
+        }
+    }
+
     struct Routing: Equatable {
         var countryCode: String?
     }

@@ -16,10 +16,11 @@ extension View {
     func query<T: PersistentModel>(
         searchText: String,
         results: Binding<[T]>,
-        _ builder: @escaping (String) -> Query<T, [T]>
+        sortOrder: CountriesList.SortOrder,
+        _ builder: @escaping (String, CountriesList.SortOrder) -> Query<T, [T]>
     ) -> some View {
         background {
-            QueryViewContainer(searchText: searchText, builder: builder) { _, values in
+            QueryViewContainer(searchText: searchText, sortOrder: sortOrder, builder: builder) { _, values in
                 results.wrappedValue = values
             }.equatable()
         }
@@ -29,18 +30,19 @@ extension View {
 /**
  This view serves as a "shield" over QueryView to avoid dual query
  */
-private struct QueryViewContainer<T: PersistentModel>: View, Equatable {
+struct QueryViewContainer<T: PersistentModel>: View, Equatable {
 
     let searchText: String
-    let builder: (String) -> Query<T, [T]>
+    let sortOrder: CountriesList.SortOrder
+    let builder: (String, CountriesList.SortOrder) -> Query<T, [T]>
     let results: ([T], [T]) -> Void
 
     var body: some View {
-        QueryView(query: builder(searchText), results: results)
+        QueryView(query: builder(searchText, sortOrder), results: results)
     }
 
     static func == (lhs: QueryViewContainer<T>, rhs: QueryViewContainer<T>) -> Bool {
-        return lhs.searchText == rhs.searchText
+        return lhs.searchText == rhs.searchText && lhs.sortOrder == rhs.sortOrder
     }
 }
 
