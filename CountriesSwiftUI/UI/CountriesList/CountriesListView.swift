@@ -16,6 +16,7 @@ struct CountriesList: View {
     @State private(set) var countriesState: Loadable<Void>
     @State private var canRequestPushPermission: Bool = false
     @State internal var searchText = ""
+    @State internal var sortByPopulation = false
     @State internal var navigationPath = NavigationPath()
     @State private var routingState: Routing = .init()
     private var routingBinding: Binding<Routing> {
@@ -34,14 +35,8 @@ struct CountriesList: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             content
-                .query(searchText: searchText, results: $countries, { search in
-                    Query(filter: #Predicate<DBModel.Country> { country in
-                        if search.isEmpty {
-                            return true
-                        } else {
-                            return country.name.localizedStandardContains(search)
-                        }
-                    }, sort: \DBModel.Country.name)
+                .query(searchText: searchText, updateTrigger: sortByPopulation, results: $countries, { search in
+                    Self.countriesQuery(searchText: search, sortByPopulation: sortByPopulation)
                 })
                 .navigationTitle("Countries")
         }
@@ -69,6 +64,18 @@ struct CountriesList: View {
         if canRequestPushPermission {
             Button(action: requestPushPermission, label: { Text("Allow Push") })
         }
+    }
+
+    private var sortButton: some View {
+        Button(action: togglePopulationSort) {
+            Label(
+                "Sort by Population",
+                systemImage: sortByPopulation ? "person.3.fill" : "textformat.abc"
+            )
+        }
+        .accessibilityIdentifier("sortByPopulationButton")
+        .accessibilityLabel("Sort by Population")
+        .accessibilityValue(sortByPopulation ? "Population" : "Alphabetical")
     }
 }
 
@@ -120,6 +127,9 @@ private extension CountriesList {
         }
         .toolbar {
             ToolbarItem {
+                sortButton
+            }
+            ToolbarItem {
                 permissionsButton
             }
         }
@@ -152,6 +162,31 @@ private extension CountriesList {
     private func requestPushPermission() {
         injected.interactors.userPermissions
             .request(permission: .pushNotifications)
+    }
+
+    private func togglePopulationSort() {
+        sortByPopulation.toggle()
+    }
+}
+
+// MARK: - Query
+
+extension CountriesList {
+    static func countriesQuery(
+        searchText: String,
+        sortByPopulation: Bool
+    ) -> Query<DBModel.Country, [DBModel.Country]> {
+        let predicate = #Predicate<DBModel.Country> { country in
+            if searchText.isEmpty {
+                return true
+            } else {
+                return country.name.localizedStandardContains(searchText)
+            }
+        }
+        let sortDescriptor: SortDescriptor<DBModel.Country> = sortByPopulation
+            ? SortDescriptor(\DBModel.Country.population, order: .reverse)
+            : SortDescriptor(\DBModel.Country.name, order: .forward)
+        return Query(filter: predicate, sort: [sortDescriptor])
     }
 }
 
