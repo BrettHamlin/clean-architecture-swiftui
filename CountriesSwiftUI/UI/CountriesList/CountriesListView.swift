@@ -76,6 +76,7 @@ struct CountriesList: View {
         Button(action: toggleSortOrder) {
             Label(sortOrder.toggleTitle, systemImage: sortOrder.systemImage)
         }
+        .accessibilityLabel(sortOrder.toggleTitle)
     }
 }
 

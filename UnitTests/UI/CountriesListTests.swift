@@ -10,6 +10,7 @@ import Testing
 import ViewInspector
 import SwiftData
 import SwiftUI
+import Foundation
 @testable import CountriesSwiftUI
 
 @MainActor
@@ -401,6 +402,24 @@ import SwiftUI
         let sut = DBModel.Country(name: "Abc", translations: ["fr": "Xyz"], population: 0, flag: nil, alpha3Code: "")
         let locale = Locale(identifier: "fr")
         #expect(sut.name(locale: locale) == "Xyz")
+    }
+
+    //harness:criterion=c-sort-label-strings-in-xcstrings
+    @Test func sortLabelsAreDeclaredInStringCatalog() throws {
+        let testFileURL = URL(fileURLWithPath: #filePath)
+        let stringCatalogURL = testFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("CountriesSwiftUI")
+            .appendingPathComponent("Resources")
+            .appendingPathComponent("Localizable.xcstrings")
+        let data = try Data(contentsOf: stringCatalogURL)
+        let catalog = try JSONSerialization.jsonObject(with: data)
+        let root = try #require(catalog as? [String: Any])
+        let strings = try #require(root["strings"] as? [String: Any])
+        #expect(strings["Sort by population"] != nil)
+        #expect(strings["Sort alphabetically"] != nil)
     }
 }
 
