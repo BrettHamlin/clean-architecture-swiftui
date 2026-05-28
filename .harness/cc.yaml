@@ -1,0 +1,90 @@
+version: "1"
+
+# gridfire_template_version: stage3-swift-ios/v1
+
+github:
+  owner: BrettHamlin
+  repo: clean-architecture-swiftui
+  base_branch: "master"
+
+reviewer_dispatch:
+  strategy: progressive
+  clustering:
+    mode: lsp_preferred
+    regex_fallback: true
+
+reviewers:
+  - name: ios-ui-state-contracts
+    file: .harness/agents/ios-ui-state-contracts.md
+    description: Checks SwiftUI/UIKit state, filtering, navigation, persistence, and deterministic view-model behavior.
+    path_hints: ["**/*.swift", "**/*.xctestplan", "**/*.xcscheme", "**/*.storyboard", "**/*.xib"]
+    language_hints: [swift, xml]
+    mandatory_triggers: ["SwiftUI", "UIKit", "Observable", "State", "Binding", "Navigation", "List", "search", "filter", "selection", "view model", "SwiftData"]
+    passing_grade: B
+    max_retries: 5
+
+  - name: ios-accessibility-ux
+    file: .harness/agents/ios-accessibility-ux.md
+    description: Checks iOS accessibility labels, traits, focus, Dynamic Type, touch targets, and user-visible interaction quality.
+    path_hints: ["**/*.swift", "**/*.storyboard", "**/*.xib", "**/*.xcassets"]
+    language_hints: [swift, xml, json]
+    mandatory_triggers: ["Button", "NavigationLink", "accessibility", "Label", "Image", "VoiceOver", "Dynamic Type", "focus", "tap", "toolbar"]
+    passing_grade: B
+    max_retries: 5
+
+  - name: xcode-project-integrity
+    file: .harness/agents/xcode-project-integrity.md
+    description: Path-triggered reviewer for Xcode project membership, schemes, SwiftPM locks, signing, capabilities, and generated artifact leaks.
+    path_hints: ["**/*.xcodeproj/**", "**/*.pbxproj", "**/*.xcworkspace/**", "**/*.xcscheme", "**/*.xctestplan", "Package.swift", "**/Package.resolved", "Podfile", "Podfile.lock", "*.entitlements", ".github/workflows/**"]
+    language_hints: [swift, xml, json, ruby, yaml]
+    mandatory_triggers: ["pbxproj", "xcscheme", "Package.swift", "Package.resolved", "Podfile.lock", "CODE_SIGN", "DEVELOPMENT_TEAM", "PRODUCT_BUNDLE_IDENTIFIER", "entitlements", "capability", "provisioning"]
+    passing_grade: B
+    max_retries: 5
+
+codegen:
+  cli_provider: codex-cli
+  default_model: gpt-5.5
+
+stages:
+  planner:
+    explore_model: gpt-5.5
+  code_gen_feature:
+    model: gpt-5.5
+    timeout_s: 21600
+  code_gen_test:
+    model: gpt-5.5
+    timeout_s: 21600
+  code_gen_e2e_test:
+    model: gpt-5.5
+    timeout_s: 21600
+
+ci:
+  provider: github-actions
+  workflow_ref: "master"
+  build:
+    workflow: ".github/workflows/gridfire-build.yml"
+    timeout_sec: 3600
+  test:
+    workflow: ".github/workflows/gridfire-test.yml"
+    timeout_sec: 3600
+  failure_extraction:
+    - source: annotations
+    - source: junit-xml
+      path: "test-results/*.xml"
+    - source: ai-extract
+
+gates:
+  plan:
+    auto_approve: true
+  ac:
+    auto_approve: true
+  merge_review:
+    auto_approve: true
+
+inner_loop:
+  reviewer_per_max: 2
+  reviewer_total_max: 5
+  build_max: 3
+  test_max: 3
+  build_test_total_max: 5
+  budget_reset_on_user_changes: true

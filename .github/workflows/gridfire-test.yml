@@ -1,0 +1,66 @@
+name: Gridfire Test
+
+# gridfire_template_version: stage3-swift-ios/v1
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Git ref to test
+        required: true
+        type: string
+
+jobs:
+  test:
+    runs-on: [self-hosted, macOS, ARM64, gridfire-ios-public-clean-architecture-xcode-26-1-1]
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+      EXPECTED_XCODE_VERSION: Xcode 26.1.1
+      XCODE_PROJECT: CountriesSwiftUI.xcodeproj
+      XCODE_SCHEME: CountriesSwiftUI
+      XCODE_DESTINATION: platform=iOS Simulator,name=iPhone 17,OS=26.1
+      DERIVED_DATA_PATH: /tmp/gridfire-derived-data
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref }}
+      - name: Select pinned Xcode
+        run: |
+          if [[ ! -d "$DEVELOPER_DIR" ]]; then
+            echo "Pinned Xcode not found at $DEVELOPER_DIR" >&2
+            ls -1 /Applications | grep -E '^Xcode' >&2 || true
+            exit 1
+          fi
+          export PATH="$DEVELOPER_DIR/usr/bin:$PATH"
+          echo "$DEVELOPER_DIR/usr/bin" >> "$GITHUB_PATH"
+          xcodebuild -version | tee "$RUNNER_TEMP/gridfire-xcode-version.txt"
+          grep -q "$EXPECTED_XCODE_VERSION" "$RUNNER_TEMP/gridfire-xcode-version.txt"
+          xcrun simctl list devices available | tee "$RUNNER_TEMP/gridfire-simctl-devices.txt"
+          xcodebuild -showdestinations \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            | tee "$RUNNER_TEMP/gridfire-xcode-destinations.txt"
+          grep -q "platform:iOS Simulator.*OS:26.1.*name:iPhone 17" "$RUNNER_TEMP/gridfire-xcode-destinations.txt"
+      - name: Run iOS simulator tests
+        run: |
+          set -o pipefail
+          export PATH="$DEVELOPER_DIR/usr/bin:$PATH"
+          rm -rf "$DERIVED_DATA_PATH"
+          xcodebuild test \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -destination "$XCODE_DESTINATION" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee "$RUNNER_TEMP/gridfire-xcodebuild-test.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gridfire-xcodebuild-test-log
+          path: |
+            ${{ runner.temp }}/gridfire-xcode-version.txt
+            ${{ runner.temp }}/gridfire-simctl-devices.txt
+            ${{ runner.temp }}/gridfire-xcode-destinations.txt
+            ${{ runner.temp }}/gridfire-xcodebuild-test.log
+          if-no-files-found: ignore
