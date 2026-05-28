@@ -11,15 +11,16 @@ import SwiftData
 
 extension View {
     /**
-     Allows for recreating the @Query each time a searchText changes
+     Allows for recreating the @Query each time query inputs change
      */
-    func query<T: PersistentModel>(
+    func query<T: PersistentModel, SortOrder: Equatable>(
         searchText: String,
+        sortOrder: SortOrder,
         results: Binding<[T]>,
-        _ builder: @escaping (String) -> Query<T, [T]>
+        _ builder: @escaping (String, SortOrder) -> Query<T, [T]>
     ) -> some View {
         background {
-            QueryViewContainer(searchText: searchText, builder: builder) { _, values in
+            QueryViewContainer(searchText: searchText, sortOrder: sortOrder, builder: builder) { _, values in
                 results.wrappedValue = values
             }.equatable()
         }
@@ -29,18 +30,19 @@ extension View {
 /**
  This view serves as a "shield" over QueryView to avoid dual query
  */
-private struct QueryViewContainer<T: PersistentModel>: View, Equatable {
+struct QueryViewContainer<T: PersistentModel, SortOrder: Equatable>: View, Equatable {
 
     let searchText: String
-    let builder: (String) -> Query<T, [T]>
+    let sortOrder: SortOrder
+    let builder: (String, SortOrder) -> Query<T, [T]>
     let results: ([T], [T]) -> Void
 
     var body: some View {
-        QueryView(query: builder(searchText), results: results)
+        QueryView(query: builder(searchText, sortOrder), results: results)
     }
 
-    static func == (lhs: QueryViewContainer<T>, rhs: QueryViewContainer<T>) -> Bool {
-        return lhs.searchText == rhs.searchText
+    static func == (lhs: QueryViewContainer<T, SortOrder>, rhs: QueryViewContainer<T, SortOrder>) -> Bool {
+        return lhs.searchText == rhs.searchText && lhs.sortOrder == rhs.sortOrder
     }
 }
 

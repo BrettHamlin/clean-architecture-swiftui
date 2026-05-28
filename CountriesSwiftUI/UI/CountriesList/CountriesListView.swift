@@ -16,6 +16,7 @@ struct CountriesList: View {
     @State private(set) var countriesState: Loadable<Void>
     @State private var canRequestPushPermission: Bool = false
     @State internal var searchText = ""
+    @State internal var sortOrder: SortOrder = .alphabetical
     @State internal var navigationPath = NavigationPath()
     @State private var routingState: Routing = .init()
     private var routingBinding: Binding<Routing> {
@@ -34,14 +35,14 @@ struct CountriesList: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             content
-                .query(searchText: searchText, results: $countries, { search in
+                .query(searchText: searchText, sortOrder: sortOrder, results: $countries, { search, sortOrder in
                     Query(filter: #Predicate<DBModel.Country> { country in
                         if search.isEmpty {
                             return true
                         } else {
                             return country.name.localizedStandardContains(search)
                         }
-                    }, sort: \DBModel.Country.name)
+                    }, sort: sortOrder.sortDescriptors)
                 })
                 .navigationTitle("Countries")
         }
@@ -69,6 +70,15 @@ struct CountriesList: View {
         if canRequestPushPermission {
             Button(action: requestPushPermission, label: { Text("Allow Push") })
         }
+    }
+
+    private var sortPicker: some View {
+        Picker("Sort", selection: $sortOrder) {
+            Text("Name").tag(SortOrder.alphabetical)
+            Text("Population").tag(SortOrder.populationDescending)
+        }
+        .pickerStyle(.menu)
+        .accessibilityIdentifier("countriesList.sortPicker")
     }
 }
 
@@ -120,6 +130,9 @@ private extension CountriesList {
         }
         .toolbar {
             ToolbarItem {
+                sortPicker
+            }
+            ToolbarItem {
                 permissionsButton
             }
         }
@@ -158,6 +171,20 @@ private extension CountriesList {
 // MARK: - Routing
 
 extension CountriesList {
+    enum SortOrder: Equatable, CaseIterable {
+        case alphabetical
+        case populationDescending
+
+        var sortDescriptors: [SortDescriptor<DBModel.Country>] {
+            switch self {
+            case .alphabetical:
+                return [SortDescriptor(\DBModel.Country.name)]
+            case .populationDescending:
+                return [SortDescriptor(\DBModel.Country.population, order: .reverse)]
+            }
+        }
+    }
+
     struct Routing: Equatable {
         var countryCode: String?
     }
