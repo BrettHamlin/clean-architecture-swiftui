@@ -12,10 +12,37 @@ import Combine
 
 struct CountriesList: View {
 
+    internal enum SortOrder: Equatable {
+        case alphabetical
+        case populationDescending
+
+        var descriptors: [SortDescriptor<DBModel.Country>] {
+            switch self {
+            case .alphabetical:
+                return [SortDescriptor(\DBModel.Country.name, order: .forward)]
+            case .populationDescending:
+                return [
+                    SortDescriptor(\DBModel.Country.population, order: .reverse),
+                    SortDescriptor(\DBModel.Country.name, order: .forward)
+                ]
+            }
+        }
+
+        var toggleTitle: String {
+            switch self {
+            case .alphabetical:
+                return "Sort by Population"
+            case .populationDescending:
+                return "Sort Alphabetically"
+            }
+        }
+    }
+
     @State private var countries: [DBModel.Country] = []
     @State private(set) var countriesState: Loadable<Void>
     @State private var canRequestPushPermission: Bool = false
     @State internal var searchText = ""
+    @State internal var sortOrder: SortOrder = .alphabetical
     @State internal var navigationPath = NavigationPath()
     @State private var routingState: Routing = .init()
     private var routingBinding: Binding<Routing> {
@@ -34,14 +61,14 @@ struct CountriesList: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             content
-                .query(searchText: searchText, results: $countries, { search in
+                .query(searchText: searchText, sortID: sortOrder, results: $countries, { search in
                     Query(filter: #Predicate<DBModel.Country> { country in
                         if search.isEmpty {
                             return true
                         } else {
                             return country.name.localizedStandardContains(search)
                         }
-                    }, sort: \DBModel.Country.name)
+                    }, sort: sortOrder.descriptors)
                 })
                 .navigationTitle("Countries")
         }
@@ -69,6 +96,10 @@ struct CountriesList: View {
         if canRequestPushPermission {
             Button(action: requestPushPermission, label: { Text("Allow Push") })
         }
+    }
+
+    private var sortButton: some View {
+        Button(action: toggleSortOrder, label: { Text(sortOrder.toggleTitle) })
     }
 }
 
@@ -120,6 +151,9 @@ private extension CountriesList {
         }
         .toolbar {
             ToolbarItem {
+                sortButton
+            }
+            ToolbarItem {
                 permissionsButton
             }
         }
@@ -152,6 +186,10 @@ private extension CountriesList {
     private func requestPushPermission() {
         injected.interactors.userPermissions
             .request(permission: .pushNotifications)
+    }
+
+    private func toggleSortOrder() {
+        sortOrder = sortOrder == .alphabetical ? .populationDescending : .alphabetical
     }
 }
 
