@@ -17,6 +17,7 @@ struct CountriesList: View {
     @State private var canRequestPushPermission: Bool = false
     @State internal var searchText = ""
     @State internal var navigationPath = NavigationPath()
+    @State internal var sortByPopulation: Bool = false
     @State private var routingState: Routing = .init()
     private var routingBinding: Binding<Routing> {
         $routingState.dispatched(to: injected.appState, \.routing.countriesList)
@@ -68,9 +69,22 @@ struct CountriesList: View {
     @ViewBuilder private var permissionsButton: some View {
         if canRequestPushPermission {
             Button(action: requestPushPermission, label: { Text("Allow Push") })
+                .accessibilityIdentifier("permissionsButton")
         }
     }
+
+    private var sortButton: some View {
+        Button(action: { sortByPopulation.toggle() }, label: {
+            Label(
+                sortByPopulation ? "Sort alphabetically" : "Sort by population",
+                systemImage: sortByPopulation ? "textformat" : "person.3.sequence"
+            )
+        })
+        .accessibilityIdentifier("sortByPopulationButton")
+    }
 }
+
+typealias CountriesListView = CountriesList
 
 // MARK: - Loading Content
 
@@ -102,11 +116,12 @@ private extension CountriesList {
 private extension CountriesList {
     @ViewBuilder
     func loadedView() -> some View {
-        if countries.isEmpty && !searchText.isEmpty {
+        let sortedCountries = Self.sortedCountries(countries, sortByPopulation: sortByPopulation)
+        if sortedCountries.isEmpty && !searchText.isEmpty {
             Text("No matches found")
                 .font(.footnote)
         }
-        List(countries, id: \.alpha3Code) { country in
+        List(sortedCountries, id: \.alpha3Code) { country in
             NavigationLink(value: country) {
                 CountryCell(country: country)
             }
@@ -120,12 +135,15 @@ private extension CountriesList {
         }
         .toolbar {
             ToolbarItem {
+                sortButton
+            }
+            ToolbarItem {
                 permissionsButton
             }
         }
         .onChange(of: routingState.countryCode, initial: true, { _, code in
             guard let code,
-                  let country = countries.first(where: { $0.alpha3Code == code})
+                  let country = sortedCountries.first(where: { $0.alpha3Code == code})
             else { return }
             navigationPath.append(country)
         })
@@ -160,6 +178,16 @@ private extension CountriesList {
 extension CountriesList {
     struct Routing: Equatable {
         var countryCode: String?
+    }
+
+    internal static func sortedCountries(
+        _ countries: [DBModel.Country],
+        sortByPopulation: Bool
+    ) -> [DBModel.Country] {
+        guard sortByPopulation else { return countries }
+        return countries.sorted { lhs, rhs in
+            lhs.population > rhs.population
+        }
     }
 }
 
