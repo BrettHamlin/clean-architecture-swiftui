@@ -355,6 +355,44 @@ import Foundation
             }
         }
     }
+
+    //harness:criterion=c-sort-toggle-switches-to-population,c-sort-toggle-back-to-alphabetical,c-query-container-rebuilds-on-sort-change,c-sort-toggle-no-force-reload
+    @Test func sortToolbarButtonReordersRowsAndTogglesBack() async throws {
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        let alphabeticalNames = apiCountries
+            .map(\.name)
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        let populationNames = apiCountries
+            .sorted { $0.population > $1.population }
+            .map(\.name)
+        #expect(alphabeticalNames != populationNames)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                let names = try view.countryCellNames()
+                #expect(names == alphabeticalNames)
+                try view.find(button: "Sort by population").tap()
+            }
+            try await sut.inspection.inspect { view in
+                let sortOrder = try view.actualView().sortOrder
+                let names = try view.countryCellNames()
+                #expect(sortOrder == .population)
+                #expect(names == populationNames)
+                try view.find(button: "Sort alphabetically").tap()
+            }
+            try await sut.inspection.inspect { view in
+                let sortOrder = try view.actualView().sortOrder
+                let names = try view.countryCellNames()
+                #expect(sortOrder == .alphabetical)
+                #expect(names == alphabeticalNames)
+                container.interactors.verify()
+            }
+        }
+    }
     
     @Test func countriesFailed() async throws {
         let container = DIContainer(interactors: .mocked())

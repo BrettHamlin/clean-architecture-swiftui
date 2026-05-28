@@ -18,7 +18,8 @@ extension View {
         results: Binding<[T]>,
         _ builder: @escaping (String) -> Query<T, [T]>
     ) -> some View {
-        query(searchText: searchText, sort: searchText, results: results) { search, _ in
+        // Preserve the existing search-only API while sharing the sort-aware rebuild path.
+        query(searchText: searchText, sort: QuerySearchOnlySort(), results: results) { search, _ in
             builder(search)
         }
     }
@@ -39,6 +40,8 @@ extension View {
         }
     }
 }
+
+private struct QuerySearchOnlySort: Equatable {}
 
 /**
  This view serves as a "shield" over QueryView to avoid dual query
