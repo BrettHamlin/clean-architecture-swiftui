@@ -16,6 +16,7 @@ struct CountriesList: View {
     @State private(set) var countriesState: Loadable<Void>
     @State private var canRequestPushPermission: Bool = false
     @State internal var searchText = ""
+    @State internal var sortByPopulation = false
     @State internal var navigationPath = NavigationPath()
     @State private var routingState: Routing = .init()
     private var routingBinding: Binding<Routing> {
@@ -34,14 +35,14 @@ struct CountriesList: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             content
-                .query(searchText: searchText, results: $countries, { search in
+                .query(searchText: searchText, sortKey: sortByPopulation, results: $countries, { search in
                     Query(filter: #Predicate<DBModel.Country> { country in
                         if search.isEmpty {
                             return true
                         } else {
                             return country.name.localizedStandardContains(search)
                         }
-                    }, sort: \DBModel.Country.name)
+                    }, sort: Self.sortDescriptors(sortByPopulation: sortByPopulation))
                 })
                 .navigationTitle("Countries")
         }
@@ -120,6 +121,9 @@ private extension CountriesList {
         }
         .toolbar {
             ToolbarItem {
+                sortButton
+            }
+            ToolbarItem {
                 permissionsButton
             }
         }
@@ -141,6 +145,13 @@ private extension CountriesList {
 
 private extension CountriesList {
 
+    var sortButton: some View {
+        Button(action: toggleSortByPopulation) {
+            Label("Sort by Population", systemImage: sortByPopulation ? "person.3.fill" : "person.3")
+        }
+        .accessibilityIdentifier("sortByPopulationButton")
+    }
+
     private func loadCountriesList(forceReload: Bool) {
         guard forceReload || countries.isEmpty else { return }
         $countriesState.load {
@@ -152,6 +163,25 @@ private extension CountriesList {
     private func requestPushPermission() {
         injected.interactors.userPermissions
             .request(permission: .pushNotifications)
+    }
+
+    private func toggleSortByPopulation() {
+        sortByPopulation.toggle()
+    }
+}
+
+// MARK: - Sorting
+
+extension CountriesList {
+
+    static func sortDescriptors(sortByPopulation: Bool) -> [SortDescriptor<DBModel.Country>] {
+        if sortByPopulation {
+            return [
+                SortDescriptor(\.population, order: .reverse),
+                SortDescriptor(\.name)
+            ]
+        }
+        return [SortDescriptor(\.name)]
     }
 }
 

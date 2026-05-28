@@ -119,6 +119,178 @@ import SwiftUI
             }
         }
     }
+
+    @Test func sortByPopulationDefaultsToFalse() async throws {
+        //harness:criterion=c-sort-state-default-false,c-sort-state-not-persisted
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let view = sut.inject(container)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                let sortByPopulation = try view.actualView().sortByPopulation
+                #expect(sortByPopulation == false)
+            }
+        }
+    }
+
+    @Test func sortByPopulationCanBeSetToTrue() async throws {
+        //harness:criterion=c-sort-state-toggle-flips
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let view = sut.inject(container)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.actualView().sortByPopulation = true
+                let sortByPopulation = try view.actualView().sortByPopulation
+                #expect(sortByPopulation == true)
+            }
+        }
+    }
+
+    @Test func toolbarContainsSortAndPermissionsButtons() async throws {
+        //harness:criterion=c-toolbar-sort-button-present,c-permissions-button-still-present
+        let container = DIContainer(interactors: .mocked())
+        container.appState[\.permissions.push] = .notRequested
+        let sut = CountriesList(state: .loaded(()))
+        let view = sut.inject(container)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                _ = try view.find(viewWithAccessibilityIdentifier: "sortByPopulationButton")
+                _ = try view.find(button: "Allow Push")
+                container.interactors.verify()
+            }
+        }
+    }
+
+    @Test func tappingSortButtonTogglesStateWithoutRefreshing() async throws {
+        //harness:criterion=c-toolbar-sort-button-flips-state,c-refresh-not-triggered-on-sort-toggle
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let view = sut.inject(container)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                let initialSortByPopulation = try view.actualView().sortByPopulation
+                #expect(initialSortByPopulation == false)
+                try view.find(viewWithAccessibilityIdentifier: "sortByPopulationButton").button().tap()
+                let toggledSortByPopulation = try view.actualView().sortByPopulation
+                #expect(toggledSortByPopulation == true)
+                container.interactors.verify()
+            }
+            try await sut.inspection.inspect { view in
+                try view.find(viewWithAccessibilityIdentifier: "sortByPopulationButton").button().tap()
+                let toggledBackSortByPopulation = try view.actualView().sortByPopulation
+                #expect(toggledBackSortByPopulation == false)
+                container.interactors.verify()
+            }
+        }
+    }
+
+    @Test func defaultSortDescriptorsOrderCountriesAlphabetically() {
+        //harness:criterion=c-query-default-alpha-sort,c-default-alpha-order-test
+        let descriptors = CountriesList.sortDescriptors(sortByPopulation: false)
+        let sortedCountries = dbCountries.sorted(using: descriptors)
+
+        #expect(descriptors.count == 1)
+        #expect(descriptors.first?.order == .forward)
+        #expect(sortedCountries.map(\.name) == ["Canada", "Georgia", "United States"])
+    }
+
+    @Test func populationSortDescriptorsOrderCountriesByPopulationDescending() {
+        //harness:criterion=c-query-population-sort-descriptors,c-population-desc-order-test
+        let descriptors = CountriesList.sortDescriptors(sortByPopulation: true)
+        let sortedCountries = dbCountries.sorted(using: descriptors)
+
+        #expect(descriptors.count == 2)
+        #expect(descriptors.first?.order == .reverse)
+        #expect(descriptors.last?.order == .forward)
+        #expect(sortedCountries.map(\.name) == ["United States", "Canada", "Georgia"])
+    }
+
+    @Test func searchAndPopulationSortCompose() {
+        //harness:criterion=c-search-plus-sort-test
+        let searchText = "a"
+        let descriptors = CountriesList.sortDescriptors(sortByPopulation: true)
+        let filteredAndSorted = dbCountries
+            .filter { $0.name.localizedStandardContains(searchText) }
+            .sorted(using: descriptors)
+        let expected = dbCountries
+            .filter { $0.name.localizedStandardContains(searchText) }
+            .sorted {
+                if $0.population == $1.population {
+                    return $0.name < $1.name
+                }
+                return $0.population > $1.population
+            }
+
+        #expect(filteredAndSorted.map(\.name) == expected.map(\.name))
+        #expect(filteredAndSorted.map(\.name) == ["United States", "Canada", "Georgia"])
+    }
+
+    @Test func queryViewContainerEqualityIncludesSortKey() {
+        //harness:criterion=c-query-view-container-equality-includes-sort,c-query-view-container-recreated-on-toggle
+        let alphabetical = queryViewContainer(searchText: "Can", sortByPopulation: false)
+        let population = queryViewContainer(searchText: "Can", sortByPopulation: true)
+        let matchingAlphabetical = queryViewContainer(searchText: "Can", sortByPopulation: false)
+
+        #expect(alphabetical != population)
+        #expect(alphabetical == matchingAlphabetical)
+    }
+
+    @Test func togglingSortDoesNotChangeSearchText() async throws {
+        //harness:criterion=c-search-unaffected-by-sort-toggle
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let view = sut.inject(container)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.actualView().searchText = "Can"
+                try view.find(viewWithAccessibilityIdentifier: "sortByPopulationButton").button().tap()
+                let searchText = try view.actualView().searchText
+                #expect(searchText == "Can")
+                container.interactors.verify()
+            }
+        }
+    }
+
+    @Test func navigationLinksRenderWhenSortedByPopulation() async throws {
+        //harness:criterion=c-navigation-link-preserved
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.actualView().sortByPopulation = true
+            }
+            try await sut.inspection.inspect { view in
+                let content = try view.content()
+                _ = try content.find(ViewType.NavigationLink.self)
+                container.interactors.verify()
+            }
+        }
+    }
+
+    @Test func pullToRefreshWorksWhenSortedByPopulation() async throws {
+        //harness:criterion=c-pull-to-refresh-preserved
+        let container = DIContainer(interactors: .mocked(countries: [
+            .refreshCountriesList
+        ]))
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.actualView().sortByPopulation = true
+                let list = try view.find(ViewType.List.self)
+                try await list.callRefreshable()
+                container.interactors.verify()
+            }
+        }
+    }
     
     @Test func countriesFailed() async throws {
         let container = DIContainer(interactors: .mocked())
@@ -175,4 +347,18 @@ extension InspectableView where View == ViewType.View<CountriesList> {
     func content() throws -> InspectableView<ViewType.NavigationStack> {
         return try implicitAnyView().navigationStack()
     }
+}
+
+@MainActor private func queryViewContainer(
+    searchText: String,
+    sortByPopulation: Bool
+) -> QueryViewContainer<DBModel.Country, Bool> {
+    QueryViewContainer(
+        searchText: searchText,
+        sortKey: sortByPopulation,
+        builder: { _ in
+            Query(sort: CountriesList.sortDescriptors(sortByPopulation: sortByPopulation))
+        },
+        results: { _, _ in }
+    )
 }
