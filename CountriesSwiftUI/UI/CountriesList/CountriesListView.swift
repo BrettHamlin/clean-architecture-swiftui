@@ -12,10 +12,34 @@ import Combine
 
 struct CountriesList: View {
 
+    internal enum SortOrder: Equatable {
+        case alphabetical
+        case byPopulation
+
+        internal var sortDescriptor: SortDescriptor<DBModel.Country> {
+            switch self {
+            case .alphabetical:
+                return SortDescriptor(\DBModel.Country.name, order: .forward)
+            case .byPopulation:
+                return SortDescriptor(\DBModel.Country.population, order: .reverse)
+            }
+        }
+
+        fileprivate var toggleLabel: LocalizedStringKey {
+            switch self {
+            case .alphabetical:
+                return "Sort by Population"
+            case .byPopulation:
+                return "Sort by Name"
+            }
+        }
+    }
+
     @State private var countries: [DBModel.Country] = []
     @State private(set) var countriesState: Loadable<Void>
     @State private var canRequestPushPermission: Bool = false
     @State internal var searchText = ""
+    @State internal var sortOrder: SortOrder = .alphabetical
     @State internal var navigationPath = NavigationPath()
     @State private var routingState: Routing = .init()
     private var routingBinding: Binding<Routing> {
@@ -34,14 +58,14 @@ struct CountriesList: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             content
-                .query(searchText: searchText, results: $countries, { search in
+                .query(searchText: searchText, sortKey: sortOrder, results: $countries, { search, sortOrder in
                     Query(filter: #Predicate<DBModel.Country> { country in
                         if search.isEmpty {
                             return true
                         } else {
                             return country.name.localizedStandardContains(search)
                         }
-                    }, sort: \DBModel.Country.name)
+                    }, sort: [sortOrder.sortDescriptor])
                 })
                 .navigationTitle("Countries")
         }
@@ -120,6 +144,11 @@ private extension CountriesList {
         }
         .toolbar {
             ToolbarItem {
+                Button(action: toggleSortOrder, label: {
+                    Text(sortOrder.toggleLabel)
+                })
+            }
+            ToolbarItem {
                 permissionsButton
             }
         }
@@ -152,6 +181,10 @@ private extension CountriesList {
     private func requestPushPermission() {
         injected.interactors.userPermissions
             .request(permission: .pushNotifications)
+    }
+
+    private func toggleSortOrder() {
+        sortOrder = sortOrder == .alphabetical ? .byPopulation : .alphabetical
     }
 }
 

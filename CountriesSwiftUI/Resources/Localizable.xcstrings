@@ -324,6 +324,38 @@
         }
       }
     },
+    "Sort by Name" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach Name sortieren"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名前で並べ替え"
+          }
+        }
+      }
+    },
+    "Sort by Population" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach Bevölkerung sortieren"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "人口で並べ替え"
+          }
+        }
+      }
+    },
     "Unable to load image" : {
       "localizations" : {
         "de" : {
