@@ -69,6 +69,7 @@ import SwiftUI
         }
     }
 
+    //harness:criterion=c-sort-preserves-refreshable
     @Test func listRefresh() async throws {
         let container = DIContainer(interactors: .mocked(countries: [
             .refreshCountriesList
@@ -82,6 +83,27 @@ import SwiftUI
             try await sut.inspection.inspect { view in
                 let list = try view.find(ViewType.List.self)
                 try await list.callRefreshable()
+                container.interactors.verify()
+            }
+        }
+    }
+
+    //harness:criterion=c-sort-preserves-navigation-destination,c-sort-preserves-routing-onchange
+    @Test func deepLinkNavigationStillUpdatesNavigationPathAfterSortFeature() async throws {
+        let container = DIContainer(interactors: .mocked())
+        container.appState[\.routing.countriesList].countryCode = apiCountries[0].alpha3Code
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.actualView().sortOrder = .population
+            }
+            try await sut.inspection.inspect { view in
+                let navigationPath = try view.actualView().navigationPath
+                #expect(!navigationPath.isEmpty)
                 container.interactors.verify()
             }
         }
@@ -115,6 +137,219 @@ import SwiftUI
                 let cell = try content.find(CountryCell.self).actualView()
                 #expect(cell.country.name == firstRowCountry.name)
                 #expect(container.appState.value == AppState())
+                container.interactors.verify()
+            }
+        }
+    }
+
+    //harness:criterion=c-sort-state-defaults-alphabetical
+    @Test func sortOrderDefaultsToAlphabetical() async throws {
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let view = sut.inject(container).modelContainer(modelContainer)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                let sortOrder = try view.actualView().sortOrder
+                #expect(sortOrder == .alphabetical)
+                container.interactors.verify()
+            }
+        }
+    }
+
+    //harness:criterion=c-sort-alphabetical-order-by-name
+    @Test func countriesLoadedAlphabeticallyByDefault() async throws {
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        let expectedNames = apiCountries
+            .map(\.name)
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                let names = try view.countryCellNames()
+                #expect(names == expectedNames)
+                container.interactors.verify()
+            }
+        }
+    }
+
+    //harness:criterion=c-sort-toggle-switches-to-population
+    @Test func countriesCanBeSortedByPopulationDescending() async throws {
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        let expectedNames = apiCountries
+            .sorted { $0.population > $1.population }
+            .map(\.name)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.actualView().sortOrder = .population
+            }
+            try await sut.inspection.inspect { view in
+                let names = try view.countryCellNames()
+                #expect(names == expectedNames)
+                container.interactors.verify()
+            }
+        }
+    }
+
+    //harness:criterion=c-sort-toggle-back-to-alphabetical
+    @Test func countriesReturnToAlphabeticalOrderAfterPopulationSort() async throws {
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        let expectedNames = apiCountries
+            .map(\.name)
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.actualView().sortOrder = .population
+            }
+            try await sut.inspection.inspect { view in
+                try view.actualView().sortOrder = .alphabetical
+            }
+            try await sut.inspection.inspect { view in
+                let names = try view.countryCellNames()
+                #expect(names == expectedNames)
+                container.interactors.verify()
+            }
+        }
+    }
+
+    //harness:criterion=c-sort-combined-with-search-correct-subset,c-sort-preserves-searchable
+    @Test func populationSortAppliesToActiveSearchSubset() async throws {
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        let searchText = "n"
+        let expectedNames = apiCountries
+            .filter { $0.name.localizedStandardContains(searchText) }
+            .sorted { $0.population > $1.population }
+            .map(\.name)
+        #expect(expectedNames.count >= 2)
+        #expect(expectedNames.count < apiCountries.count)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.actualView().searchText = searchText
+                try view.actualView().sortOrder = .population
+            }
+            try await sut.inspection.inspect { view in
+                let names = try view.countryCellNames()
+                #expect(names == expectedNames)
+                container.interactors.verify()
+            }
+        }
+    }
+
+    //harness:criterion=c-sort-combined-with-search-no-matches,c-sort-preserves-searchable
+    @Test func noSearchMatchesRemainEmptyForBothSortOrders() async throws {
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.actualView().searchText = "ZZZNOMATCH"
+            }
+            try await sut.inspection.inspect { view in
+                let names = try view.countryCellNames()
+                #expect(names.isEmpty)
+                try view.actualView().sortOrder = .population
+            }
+            try await sut.inspection.inspect { view in
+                let names = try view.countryCellNames()
+                #expect(names.isEmpty)
+                container.interactors.verify()
+            }
+        }
+    }
+
+    //harness:criterion=c-query-container-rebuilds-on-sort-change,c-query-search-accepts-sort-input
+    @Test func sortOnlyChangeRebuildsQueryWithSearchUnchanged() async throws {
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        let searchText = "n"
+        let expectedAlphabeticalNames = apiCountries
+            .filter { $0.name.localizedStandardContains(searchText) }
+            .map(\.name)
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        let expectedPopulationNames = apiCountries
+            .filter { $0.name.localizedStandardContains(searchText) }
+            .sorted { $0.population > $1.population }
+            .map(\.name)
+        #expect(expectedAlphabeticalNames != expectedPopulationNames)
+        var alphabeticalNames: [String] = []
+        var populationNames: [String] = []
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.actualView().searchText = searchText
+            }
+            try await sut.inspection.inspect { view in
+                alphabeticalNames = try view.countryCellNames()
+                try view.actualView().sortOrder = .population
+            }
+            try await sut.inspection.inspect { view in
+                populationNames = try view.countryCellNames()
+                #expect(alphabeticalNames == expectedAlphabeticalNames)
+                #expect(populationNames == expectedPopulationNames)
+                #expect(alphabeticalNames != populationNames)
+                container.interactors.verify()
+            }
+        }
+    }
+
+    //harness:criterion=c-sort-toggle-toolbar-item-present,c-sort-preserves-permissions-button,c-sort-label-strings-in-xcstrings
+    @Test func sortAndPermissionsToolbarButtonsAppearTogether() async throws {
+        let container = DIContainer(interactors: .mocked())
+        container.appState[\.permissions.push] = .notRequested
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                #expect(throws: Never.self) { try view.find(button: "Sort by population") }
+                #expect(throws: Never.self) { try view.find(button: "Allow Push") }
+                container.interactors.verify()
+            }
+        }
+    }
+
+    //harness:criterion=c-sort-toggle-no-force-reload
+    @Test func activatingSortToggleDoesNotRefreshCountries() async throws {
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.find(button: "Sort by population").tap()
+            }
+            try await sut.inspection.inspect { view in
+                let sortOrder = try view.actualView().sortOrder
+                #expect(sortOrder == .population)
                 container.interactors.verify()
             }
         }
@@ -174,5 +409,12 @@ import SwiftUI
 extension InspectableView where View == ViewType.View<CountriesList> {
     func content() throws -> InspectableView<ViewType.NavigationStack> {
         return try implicitAnyView().navigationStack()
+    }
+
+    @MainActor
+    func countryCellNames() throws -> [String] {
+        return try content()
+            .findAll(CountryCell.self)
+            .map { try $0.actualView().country.name }
     }
 }

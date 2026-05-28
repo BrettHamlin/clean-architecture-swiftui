@@ -18,8 +18,22 @@ extension View {
         results: Binding<[T]>,
         _ builder: @escaping (String) -> Query<T, [T]>
     ) -> some View {
+        query(searchText: searchText, sort: searchText, results: results) { search, _ in
+            builder(search)
+        }
+    }
+
+    /**
+     Allows for recreating the @Query each time searchText or sort changes
+     */
+    func query<T: PersistentModel, Sort: Equatable>(
+        searchText: String,
+        sort: Sort,
+        results: Binding<[T]>,
+        _ builder: @escaping (String, Sort) -> Query<T, [T]>
+    ) -> some View {
         background {
-            QueryViewContainer(searchText: searchText, builder: builder) { _, values in
+            QueryViewContainer(searchText: searchText, sort: sort, builder: builder) { _, values in
                 results.wrappedValue = values
             }.equatable()
         }
@@ -29,18 +43,19 @@ extension View {
 /**
  This view serves as a "shield" over QueryView to avoid dual query
  */
-private struct QueryViewContainer<T: PersistentModel>: View, Equatable {
+private struct QueryViewContainer<T: PersistentModel, Sort: Equatable>: View, Equatable {
 
     let searchText: String
-    let builder: (String) -> Query<T, [T]>
+    let sort: Sort
+    let builder: (String, Sort) -> Query<T, [T]>
     let results: ([T], [T]) -> Void
 
     var body: some View {
-        QueryView(query: builder(searchText), results: results)
+        QueryView(query: builder(searchText, sort), results: results)
     }
 
-    static func == (lhs: QueryViewContainer<T>, rhs: QueryViewContainer<T>) -> Bool {
-        return lhs.searchText == rhs.searchText
+    static func == (lhs: QueryViewContainer<T, Sort>, rhs: QueryViewContainer<T, Sort>) -> Bool {
+        return lhs.searchText == rhs.searchText && lhs.sort == rhs.sort
     }
 }
 
