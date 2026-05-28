@@ -40,10 +40,12 @@ struct MockedCountriesInteractor: Mock, CountriesInteractor {
     enum Action: Equatable {
         case refreshCountriesList
         case loadCountryDetails(country: DBModel.Country, forceReload: Bool)
+        case toggleFavorite(country: DBModel.Country)
     }
     
     let actions: MockActions<Action>
     var detailsResponse: Result<DBModel.CountryDetails, Error> = .failure(MockError.valueNotSet)
+    var toggleFavoriteResponse: Result<Void, Error> = .success(())
 
     init(expected: [Action]) {
         self.actions = .init(expected: expected)
@@ -56,6 +58,11 @@ struct MockedCountriesInteractor: Mock, CountriesInteractor {
     func loadCountryDetails(country: DBModel.Country, forceReload: Bool) async throws -> DBModel.CountryDetails {
         register(.loadCountryDetails(country: country, forceReload: forceReload))
         return try detailsResponse.get()
+    }
+
+    func toggleFavorite(country: DBModel.Country) async throws {
+        register(.toggleFavorite(country: country))
+        try toggleFavoriteResponse.get()
     }
 }
 

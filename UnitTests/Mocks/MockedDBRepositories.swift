@@ -17,12 +17,14 @@ final class MockedCountriesDBRepository: Mock, CountriesDBRepository {
         case fetchCountryDetails(DBModel.Country)
         case storeCountries([ApiModel.Country])
         case storeDetails(ApiModel.CountryDetails, country: DBModel.Country)
+        case setFavorite(alpha3Code: String, isFavorite: Bool)
     }
     var actions = MockActions<Action>(expected: [])
 
     var storeCountriesResults: [Result<Void, Error>] = []
     var storeCountryDetailsResults: [Result<Void, Error>] = []
     var countryDetailsResults: [Result<DBModel.CountryDetails?, Error>] = []
+    var setFavoriteResults: [Result<Void, Error>] = [.success(())]
 
     // MARK: - API
 
@@ -43,6 +45,12 @@ final class MockedCountriesDBRepository: Mock, CountriesDBRepository {
         register(.storeDetails(countryDetails, country: country))
         guard !storeCountryDetailsResults.isEmpty else { throw MockError.valueNotSet }
         try storeCountryDetailsResults.removeFirst().get()
+    }
+
+    func setFavorite(alpha3Code: String, isFavorite: Bool) async throws {
+        register(.setFavorite(alpha3Code: alpha3Code, isFavorite: isFavorite))
+        guard !setFavoriteResults.isEmpty else { throw MockError.valueNotSet }
+        try setFavoriteResults.removeFirst().get()
     }
 }
 

@@ -9,6 +9,7 @@
 protocol CountriesInteractor {
     func refreshCountriesList() async throws
     func loadCountryDetails(country: DBModel.Country, forceReload: Bool) async throws -> DBModel.CountryDetails
+    func toggleFavorite(country: DBModel.Country) async throws
 }
 
 struct RealCountriesInteractor: CountriesInteractor {
@@ -35,6 +36,10 @@ struct RealCountriesInteractor: CountriesInteractor {
         }
         return stored
     }
+
+    func toggleFavorite(country: DBModel.Country) async throws {
+        try await dbRepository.setFavorite(alpha3Code: country.alpha3Code, isFavorite: !country.isFavorite)
+    }
 }
 
 struct StubCountriesInteractor: CountriesInteractor {
@@ -44,5 +49,8 @@ struct StubCountriesInteractor: CountriesInteractor {
 
     func loadCountryDetails(country: DBModel.Country, forceReload: Bool) async throws -> DBModel.CountryDetails {
         throw ValueIsMissingError()
+    }
+
+    func toggleFavorite(country: DBModel.Country) async throws {
     }
 }

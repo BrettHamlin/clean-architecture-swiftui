@@ -16,8 +16,10 @@ struct CountriesList: View {
     @State private(set) var countriesState: Loadable<Void>
     @State private var canRequestPushPermission: Bool = false
     @State internal var searchText = ""
+    @State internal var showFavoritesOnly: Bool = false
     @State internal var navigationPath = NavigationPath()
     @State private var routingState: Routing = .init()
+    @State private var routedCountryCode: String?
     private var routingBinding: Binding<Routing> {
         $routingState.dispatched(to: injected.appState, \.routing.countriesList)
     }
@@ -34,13 +36,10 @@ struct CountriesList: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             content
-                .query(searchText: searchText, results: $countries, { search in
+                .query(searchText: searchText, showFavoritesOnly: showFavoritesOnly, results: $countries, { search, favoritesOnly in
                     Query(filter: #Predicate<DBModel.Country> { country in
-                        if search.isEmpty {
-                            return true
-                        } else {
-                            return country.name.localizedStandardContains(search)
-                        }
+                        (!favoritesOnly || country.isFavorite)
+                            && (search.isEmpty || country.name.localizedStandardContains(search))
                     }, sort: \DBModel.Country.name)
                 })
                 .navigationTitle("Countries")
@@ -69,6 +68,13 @@ struct CountriesList: View {
         if canRequestPushPermission {
             Button(action: requestPushPermission, label: { Text("Allow Push") })
         }
+    }
+
+    private var favoritesFilterButton: some View {
+        Button(action: toggleFavoritesFilter) {
+            Label("Show Favorites", systemImage: showFavoritesOnly ? "star.fill" : "star")
+        }
+        .accessibilityIdentifier("showFavoritesOnlyButton")
     }
 }
 
@@ -120,18 +126,23 @@ private extension CountriesList {
         }
         .toolbar {
             ToolbarItem {
+                favoritesFilterButton
+            }
+            ToolbarItem {
                 permissionsButton
             }
         }
         .onChange(of: routingState.countryCode, initial: true, { _, code in
-            guard let code,
-                  let country = countries.first(where: { $0.alpha3Code == code})
-            else { return }
-            navigationPath.append(country)
+            routeToCountry(code: code)
+        })
+        .onChange(of: countries.map(\.alpha3Code), initial: true, { _, _ in
+            routeToCountry(code: routingState.countryCode)
         })
         .onChange(of: navigationPath, { _, path in
             if !path.isEmpty {
                 routingBinding.wrappedValue.countryCode = nil
+            } else {
+                routedCountryCode = nil
             }
         })
     }
@@ -152,6 +163,21 @@ private extension CountriesList {
     private func requestPushPermission() {
         injected.interactors.userPermissions
             .request(permission: .pushNotifications)
+    }
+
+    private func toggleFavoritesFilter() {
+        showFavoritesOnly.toggle()
+    }
+
+    @MainActor
+    private func routeToCountry(code: String?) {
+        guard let code, routedCountryCode != code else { return }
+        if let country = countries.first(where: { $0.alpha3Code == code }) {
+            routedCountryCode = code
+            navigationPath.append(country)
+        } else if showFavoritesOnly {
+            showFavoritesOnly = false
+        }
     }
 }
 

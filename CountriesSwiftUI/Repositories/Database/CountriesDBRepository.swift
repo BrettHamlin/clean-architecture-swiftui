@@ -14,6 +14,7 @@ protocol CountriesDBRepository {
     func countryDetails(for country: DBModel.Country) async throws -> DBModel.CountryDetails?
     func store(countries: [ApiModel.Country]) async throws
     func store(countryDetails: ApiModel.CountryDetails, for country: DBModel.Country) async throws
+    func setFavorite(alpha3Code: String, isFavorite: Bool) async throws
 }
 
 extension MainDBRepository: CountriesDBRepository {
@@ -29,11 +30,17 @@ extension MainDBRepository: CountriesDBRepository {
 
     func store(countries: [ApiModel.Country]) async throws {
         try modelContext.transaction {
-            countries
-                .map { $0.dbModel() }
-                .forEach {
-                    modelContext.insert($0)
+            for country in countries {
+                let alpha3Code = country.alpha3Code
+                let fetchDescriptor = FetchDescriptor(predicate: #Predicate<DBModel.Country> {
+                    $0.alpha3Code == alpha3Code
+                })
+                if let stored = try modelContext.fetch(fetchDescriptor).first {
+                    stored.update(with: country)
+                } else {
+                    modelContext.insert(country.dbModel())
                 }
+            }
         }
     }
 
@@ -56,6 +63,18 @@ extension MainDBRepository: CountriesDBRepository {
             modelContext.insert(object)
         }
     }
+
+    func setFavorite(alpha3Code: String, isFavorite: Bool) async throws {
+        try modelContext.transaction {
+            let fetchDescriptor = FetchDescriptor(predicate: #Predicate<DBModel.Country> {
+                $0.alpha3Code == alpha3Code
+            })
+            guard let country = try modelContext.fetch(fetchDescriptor).first else {
+                throw ValueIsMissingError()
+            }
+            country.isFavorite = isFavorite
+        }
+    }
 }
 
 internal extension ApiModel.Country {
@@ -63,6 +82,15 @@ internal extension ApiModel.Country {
         return .init(name: name, translations: translations,
                      population: population, flag: flag,
                      alpha3Code: alpha3Code)
+    }
+}
+
+private extension DBModel.Country {
+    func update(with country: ApiModel.Country) {
+        name = country.name
+        translations = country.translations
+        population = country.population
+        flag = country.flag
     }
 }
 

@@ -32,6 +32,11 @@ struct CountryDetails: View {
     var body: some View {
         content
             .navigationBarTitle(country.name(locale: locale))
+            .toolbar {
+                ToolbarItem {
+                    favoriteButton
+                }
+            }
             .onReceive(routingUpdate) { self.routingState = $0 }
             .onReceive(inspection.notice) { self.inspection.visit(self, $0) }
     }
@@ -63,6 +68,14 @@ private extension CountryDetails {
     
     func showCountryDetailsSheet() {
         injected.appState[\.routing.countryDetails.detailsSheet] = true
+    }
+
+    func toggleFavorite() {
+        Task {
+            do {
+                try await injected.interactors.countries.toggleFavorite(country: country)
+            } catch { }
+        }
     }
 }
 
@@ -96,6 +109,16 @@ private extension CountryDetails {
 
 @MainActor
 private extension CountryDetails {
+    var favoriteButton: some View {
+        Button(action: toggleFavorite) {
+            Label(
+                country.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                systemImage: country.isFavorite ? "star.fill" : "star"
+            )
+        }
+        .accessibilityIdentifier("favoriteCountryButton")
+    }
+
     func loadedView(_ countryDetails: DBModel.CountryDetails) -> some View {
         List {
             country.flag.map { url in

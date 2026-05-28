@@ -249,6 +249,49 @@ final class LoadCountryDetailsTests: CountriesInteractorTests {
     }
 }
 
+// MARK: - toggleFavorite(country:)
+
+final class ToggleFavoriteTests: CountriesInteractorTests {
+
+    @Test func togglesUnfavoritedCountryOn() async throws {
+        // harness:criterion=c-real-interactor-togglefavorite-calls-repo
+        let country = DBModel.Country(
+            name: "Toggle On",
+            translations: [:],
+            population: 1,
+            alpha3Code: "TON",
+            isFavorite: false)
+        mockedDBRepo.actions = .init(expected: [
+            .setFavorite(alpha3Code: country.alpha3Code, isFavorite: true),
+        ])
+        mockedDBRepo.setFavoriteResults = [.success(())]
+
+        try await sut.toggleFavorite(country: country)
+
+        mockedWebRepo.verify()
+        mockedDBRepo.verify()
+    }
+
+    @Test func togglesFavoritedCountryOff() async throws {
+        // harness:criterion=c-real-interactor-togglefavorite-calls-repo
+        let country = DBModel.Country(
+            name: "Toggle Off",
+            translations: [:],
+            population: 1,
+            alpha3Code: "TOF",
+            isFavorite: true)
+        mockedDBRepo.actions = .init(expected: [
+            .setFavorite(alpha3Code: country.alpha3Code, isFavorite: false),
+        ])
+        mockedDBRepo.setFavoriteResults = [.success(())]
+
+        try await sut.toggleFavorite(country: country)
+
+        mockedWebRepo.verify()
+        mockedDBRepo.verify()
+    }
+}
+
 final class StubCountriesInteractorTests: CountriesInteractorTests {
 
     @Test func stubInteractor() async throws {

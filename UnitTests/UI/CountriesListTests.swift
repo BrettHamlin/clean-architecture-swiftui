@@ -119,6 +119,136 @@ import SwiftUI
             }
         }
     }
+
+    @Test func favoritesToolbarButtonIsPresent() async throws {
+        // harness:criterion=c-countries-list-toolbar-filter-button-present,c-countries-list-tests-toolbar-button-present
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect(after: .seconds(0.2)) { view in
+                let buttons = view.favoriteFilterButtons()
+                #expect(buttons.count == 1)
+                container.interactors.verify()
+            }
+        }
+    }
+
+    @Test func favoritesToolbarButtonTogglesFilterState() async throws {
+        // harness:criterion=c-countries-list-toolbar-toggle-changes-state,c-countries-list-tests-filter-toggle-state
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect(after: .seconds(0.2)) { view in
+                #expect(try view.actualView().showFavoritesOnly == false)
+                try view.favoriteFilterButton().tap()
+            }
+            try await sut.inspection.inspect { view in
+                #expect(try view.actualView().showFavoritesOnly == true)
+                try view.favoriteFilterButton().tap()
+            }
+            try await sut.inspection.inspect { view in
+                #expect(try view.actualView().showFavoritesOnly == false)
+                container.interactors.verify()
+            }
+        }
+    }
+
+    @Test func queryViewContainerEqualityIncludesFavoritesFilter() throws {
+        // harness:criterion=c-query-view-container-equality-includes-filter
+        let lhs = QueryViewContainer<DBModel.Country>(
+            searchText: "abc",
+            showFavoritesOnly: false,
+            builder: { _, _ in Query(sort: \DBModel.Country.name) },
+            results: { _, _ in })
+        let rhs = QueryViewContainer<DBModel.Country>(
+            searchText: "abc",
+            showFavoritesOnly: true,
+            builder: { _, _ in Query(sort: \DBModel.Country.name) },
+            results: { _, _ in })
+
+        #expect(lhs != rhs)
+    }
+
+    @Test func favoritesFilterShowsOnlyFavoritedCountries() async throws {
+        // harness:criterion=c-predicate-filters-favorites-when-active
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let favorite = apiCountries[1]
+        try await dbRepository.setFavorite(alpha3Code: favorite.alpha3Code, isFavorite: true)
+        let view = sut.inject(container).modelContainer(modelContainer)
+
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect(after: .seconds(0.2)) { view in
+                try view.actualView().showFavoritesOnly = true
+            }
+            try await sut.inspection.inspect(after: .seconds(0.2)) { view in
+                let cells = try view.content().findAll(CountryCell.self).map { try $0.actualView().country }
+                #expect(cells.count == 1)
+                #expect(cells.first?.alpha3Code == favorite.alpha3Code)
+                #expect(cells.allSatisfy { $0.isFavorite })
+                container.interactors.verify()
+            }
+        }
+    }
+
+    @Test func inactiveFavoritesFilterShowsAllCountries() async throws {
+        // harness:criterion=c-predicate-returns-all-when-filter-inactive
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        try await dbRepository.setFavorite(alpha3Code: apiCountries[1].alpha3Code, isFavorite: true)
+        let view = sut.inject(container).modelContainer(modelContainer)
+
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect(after: .seconds(0.2)) { view in
+                let cells = try view.content().findAll(CountryCell.self).map { try $0.actualView().country }
+                #expect(cells.count == apiCountries.count)
+                #expect(cells.contains { $0.isFavorite })
+                #expect(cells.contains { !$0.isFavorite })
+                container.interactors.verify()
+            }
+        }
+    }
+
+    @Test func deepLinkRoutesToCountryHiddenByFavoritesFilter() async throws {
+        // harness:criterion=c-deeplink-routing-bypasses-favorites-filter,c-countries-list-tests-deeplink-not-broken-by-filter
+        let store = Store(AppState())
+        let container = DIContainer(appState: store, interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let hiddenByFavoritesFilter = apiCountries[0]
+        try await dbRepository.setFavorite(alpha3Code: apiCountries[1].alpha3Code, isFavorite: true)
+        let view = sut.inject(container).modelContainer(modelContainer)
+
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect(after: .seconds(0.2)) { view in
+                try view.actualView().showFavoritesOnly = true
+            }
+            try await sut.inspection.inspect(after: .seconds(0.2)) { view in
+                #expect(try view.actualView().showFavoritesOnly == true)
+                store[\.routing.countriesList.countryCode] = hiddenByFavoritesFilter.alpha3Code
+            }
+            try await sut.inspection.inspect(after: .seconds(0.5)) { view in
+                #expect(try view.actualView().navigationPath.isEmpty == false)
+                container.interactors.verify()
+            }
+        }
+    }
     
     @Test func countriesFailed() async throws {
         let container = DIContainer(interactors: .mocked())
@@ -174,5 +304,15 @@ import SwiftUI
 extension InspectableView where View == ViewType.View<CountriesList> {
     func content() throws -> InspectableView<ViewType.NavigationStack> {
         return try implicitAnyView().navigationStack()
+    }
+
+    func favoriteFilterButtons() -> [InspectableView<ViewType.Button>] {
+        return findAll(ViewType.Button.self) {
+            try $0.accessibilityIdentifier() == "showFavoritesOnlyButton"
+        }
+    }
+
+    func favoriteFilterButton() throws -> InspectableView<ViewType.Button> {
+        return try #require(favoriteFilterButtons().first)
     }
 }

@@ -20,14 +20,17 @@ extension DBModel {
         var population: Int
         var flag: URL?
         @Attribute(.unique) var alpha3Code: String
+        var isFavorite: Bool = false
         @Relationship(inverse: \CountryDetails.neighbors) var neighbors: [CountryDetails] = []
 
-        init(name: String, translations: [String: String?], population: Int, flag: URL? = nil, alpha3Code: String) {
+        init(name: String, translations: [String: String?], population: Int, flag: URL? = nil,
+             alpha3Code: String, isFavorite: Bool = false) {
             self.name = name
             self.translations = translations
             self.population = population
             self.flag = flag
             self.alpha3Code = alpha3Code
+            self.isFavorite = isFavorite
         }
 
         func name(locale: Locale) -> String {
