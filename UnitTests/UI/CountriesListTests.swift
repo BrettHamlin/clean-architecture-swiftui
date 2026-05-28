@@ -175,6 +175,7 @@ import SwiftUI
                 let queryContainer = try view.find(QueryViewContainer<DBModel.Country>.self).actualView()
                 #expect(actualView.sortByPopulation == true)
                 #expect(queryContainer.sort == .some(populationSort))
+                #expect(throws: Never.self) { try view.find(button: "Allow Push") }
                 let sortButton = try view.find(button: "Sort Alphabetically")
                 try sortButton.tap()
             }

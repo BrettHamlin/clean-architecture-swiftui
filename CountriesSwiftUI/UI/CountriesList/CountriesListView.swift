@@ -182,7 +182,7 @@ private extension CountriesList {
     var sortButton: some View {
         Button(action: toggleSort) {
             Label(sortByPopulation ? "Sort Alphabetically" : "Sort by Population",
-                  systemImage: "arrow.up.arrow.down")
+                  systemImage: sortByPopulation ? "textformat" : "person.3.fill")
         }
     }
 }
