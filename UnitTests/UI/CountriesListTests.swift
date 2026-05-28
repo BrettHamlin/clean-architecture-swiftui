@@ -213,9 +213,10 @@ import SwiftUI
             }
             try await sut.inspection.inspect(after: .seconds(0.2)) { view in
                 let cells = try view.content().findAll(CountryCell.self).map { try $0.actualView().country }
+                let allCellsAreFavorites = cells.allSatisfy(\.isFavorite)
                 #expect(cells.count == 1)
                 #expect(cells.first?.alpha3Code == favorite.alpha3Code)
-                #expect(cells.allSatisfy { $0.isFavorite })
+                #expect(allCellsAreFavorites)
                 container.interactors.verify()
             }
         }
@@ -234,9 +235,11 @@ import SwiftUI
         try await ViewHosting.host(view) {
             try await sut.inspection.inspect(after: .seconds(0.2)) { view in
                 let cells = try view.content().findAll(CountryCell.self).map { try $0.actualView().country }
+                let containsFavorite = cells.contains(where: \.isFavorite)
+                let containsNonFavorite = cells.contains { !$0.isFavorite }
                 #expect(cells.count == apiCountries.count)
-                #expect(cells.contains { $0.isFavorite })
-                #expect(cells.contains { !$0.isFavorite })
+                #expect(containsFavorite)
+                #expect(containsNonFavorite)
                 container.interactors.verify()
             }
         }

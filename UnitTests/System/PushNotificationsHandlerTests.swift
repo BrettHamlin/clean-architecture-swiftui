@@ -13,11 +13,12 @@ import UserNotifications
 @MainActor
 @Suite struct PushNotificationsHandlerTests {
 
-    @Test func isCenterDelegate() {
+    @Test func isCenterDelegate() throws {
         let mockedHandler = MockedDeepLinksHandler(expected: [])
         let sut = RealPushNotificationsHandler(deepLinksHandler: mockedHandler)
         let center = UNUserNotificationCenter.current()
-        #expect(center.delegate === sut)
+        let delegate = try #require(center.delegate as? RealPushNotificationsHandler)
+        #expect(delegate === sut)
         mockedHandler.verify()
     }
 

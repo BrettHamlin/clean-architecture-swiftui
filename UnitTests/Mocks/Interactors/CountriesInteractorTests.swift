@@ -290,6 +290,28 @@ final class ToggleFavoriteTests: CountriesInteractorTests {
         mockedWebRepo.verify()
         mockedDBRepo.verify()
     }
+
+    @Test func propagatesSetFavoriteFailure() async throws {
+        // harness:criterion=c-mocked-db-repo-setfavorite-action-case,c-mocked-db-repo-setfavorite-configurable-result
+        let country = DBModel.Country(
+            name: "Toggle Failure",
+            translations: [:],
+            population: 1,
+            alpha3Code: "TFL",
+            isFavorite: false)
+        let error = NSError.test
+        mockedDBRepo.actions = .init(expected: [
+            .setFavorite(alpha3Code: country.alpha3Code, isFavorite: true),
+        ])
+        mockedDBRepo.setFavoriteResults = [.failure(error)]
+
+        await #expect(throws: error) {
+            try await sut.toggleFavorite(country: country)
+        }
+
+        mockedWebRepo.verify()
+        mockedDBRepo.verify()
+    }
 }
 
 final class StubCountriesInteractorTests: CountriesInteractorTests {

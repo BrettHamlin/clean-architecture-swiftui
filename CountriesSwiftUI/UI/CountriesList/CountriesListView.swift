@@ -39,8 +39,13 @@ struct CountriesList: View {
             content
                 .query(searchText: searchText, showFavoritesOnly: showFavoritesOnly, results: $countries, { search, favoritesOnly in
                     Query(filter: #Predicate<DBModel.Country> { country in
-                        (!favoritesOnly || country.isFavorite)
-                            && (search.isEmpty || country.name.localizedStandardContains(search))
+                        if favoritesOnly && !country.isFavorite {
+                            return false
+                        } else if search.isEmpty {
+                            return true
+                        } else {
+                            return country.name.localizedStandardContains(search)
+                        }
                     }, sort: \DBModel.Country.name)
                 })
                 .navigationTitle("Countries")
