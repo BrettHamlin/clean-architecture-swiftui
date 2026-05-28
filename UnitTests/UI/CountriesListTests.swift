@@ -260,6 +260,26 @@ import Foundation
         #expect(byPopulation.map(\.name).sorted() == expectedNames)
     }
 
+    // harness:criterion=c-search-with-alphabetical-sort-filters-correctly,c-search-with-population-sort-filters-correctly,c-alphabetical-sort-descriptor-seam,c-population-sort-descriptor-seam
+    @Test func querySearchAndSortComposeForFilteredSubset() async throws {
+        let searchText = "e"
+        let matchingCountries = apiCountries.filter {
+            $0.name.localizedStandardContains(searchText)
+        }
+        let expectedAlphabeticalNames = matchingCountries
+            .sorted { $0.name < $1.name }
+            .map(\.name)
+        let expectedPopulationNames = matchingCountries
+            .sorted { $0.population > $1.population }
+            .map(\.name)
+
+        let alphabetical = try await queryResults(searchText: searchText, sortMode: .alphabetical)
+        let byPopulation = try await queryResults(searchText: searchText, sortMode: .byPopulation)
+
+        #expect(alphabetical.map(\.name) == expectedAlphabeticalNames)
+        #expect(byPopulation.map(\.name) == expectedPopulationNames)
+    }
+
     // harness:criterion=c-pull-to-refresh-unaffected-by-sort
     @Test func pullToRefreshWorksInEverySortMode() async throws {
         for sortMode in CountriesList.SortMode.allCases {

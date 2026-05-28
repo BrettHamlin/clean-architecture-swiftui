@@ -70,8 +70,14 @@ struct CountriesList: View {
         Button(action: toggleSortMode) {
             Label(sortMode.toggleTitle, systemImage: sortMode.toggleSystemImage)
         }
-        .accessibilityIdentifier("countries.sort.toggle")
+        .accessibilityIdentifier(AccessibilityID.sortToggle)
         .accessibilityValue(sortMode.accessibilityValue)
+    }
+}
+
+private extension CountriesList {
+    enum AccessibilityID {
+        static let sortToggle = "countries.sort.toggle"
     }
 }
 
