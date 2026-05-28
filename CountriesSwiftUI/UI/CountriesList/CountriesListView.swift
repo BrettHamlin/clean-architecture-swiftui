@@ -16,6 +16,7 @@ struct CountriesList: View {
     @State private(set) var countriesState: Loadable<Void>
     @State private var canRequestPushPermission: Bool = false
     @State internal var searchText = ""
+    @State internal var sortByPopulation: Bool = false
     @State internal var navigationPath = NavigationPath()
     @State private var routingState: Routing = .init()
     private var routingBinding: Binding<Routing> {
@@ -29,6 +30,35 @@ struct CountriesList: View {
 
     init(state: Loadable<Void> = .notRequested) {
         self._countriesState = .init(initialValue: state)
+    }
+
+    internal var visibleCountries: [DBModel.Country] {
+        Self.makeVisibleCountries(
+            from: countries,
+            searchText: searchText,
+            sortByPopulation: sortByPopulation
+        )
+    }
+
+    internal static func makeVisibleCountries(
+        from countries: [DBModel.Country],
+        searchText: String,
+        sortByPopulation: Bool
+    ) -> [DBModel.Country] {
+        let filteredCountries = searchText.isEmpty
+            ? countries
+            : countries.filter { $0.name.localizedStandardContains(searchText) }
+
+        guard sortByPopulation else {
+            return filteredCountries
+        }
+
+        return filteredCountries.sorted {
+            if $0.population == $1.population {
+                return $0.name < $1.name
+            }
+            return $0.population > $1.population
+        }
     }
 
     var body: some View {
@@ -70,6 +100,18 @@ struct CountriesList: View {
             Button(action: requestPushPermission, label: { Text("Allow Push") })
         }
     }
+
+    private var sortButtonAccessibilityLabel: LocalizedStringKey {
+        sortByPopulation ? "Sort Alphabetically" : "Sort by Population"
+    }
+
+    @ViewBuilder private var sortButton: some View {
+        Button(action: { sortByPopulation.toggle() }, label: {
+            Label(sortButtonAccessibilityLabel, systemImage: "arrow.up.arrow.down")
+                .labelStyle(.iconOnly)
+        })
+        .accessibilityLabel(Text(sortButtonAccessibilityLabel))
+    }
 }
 
 // MARK: - Loading Content
@@ -102,11 +144,12 @@ private extension CountriesList {
 private extension CountriesList {
     @ViewBuilder
     func loadedView() -> some View {
-        if countries.isEmpty && !searchText.isEmpty {
+        let visibleCountries = self.visibleCountries
+        if visibleCountries.isEmpty && !searchText.isEmpty {
             Text("No matches found")
                 .font(.footnote)
         }
-        List(countries, id: \.alpha3Code) { country in
+        List(visibleCountries, id: \.alpha3Code) { country in
             NavigationLink(value: country) {
                 CountryCell(country: country)
             }
@@ -119,6 +162,9 @@ private extension CountriesList {
             loadCountriesList(forceReload: true)
         }
         .toolbar {
+            ToolbarItem {
+                sortButton
+            }
             ToolbarItem {
                 permissionsButton
             }
