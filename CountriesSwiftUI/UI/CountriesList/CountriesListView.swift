@@ -16,6 +16,7 @@ struct CountriesList: View {
     @State private(set) var countriesState: Loadable<Void>
     @State private var canRequestPushPermission: Bool = false
     @State internal var searchText = ""
+    @State internal var sortOrder: SortOrder = .alphabetical
     @State internal var navigationPath = NavigationPath()
     @State private var routingState: Routing = .init()
     private var routingBinding: Binding<Routing> {
@@ -34,14 +35,20 @@ struct CountriesList: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             content
-                .query(searchText: searchText, results: $countries, { search in
-                    Query(filter: #Predicate<DBModel.Country> { country in
+                .query(searchText: searchText, sort: sortOrder, results: $countries, { search, sortOrder in
+                    let filter = #Predicate<DBModel.Country> { country in
                         if search.isEmpty {
                             return true
                         } else {
                             return country.name.localizedStandardContains(search)
                         }
-                    }, sort: \DBModel.Country.name)
+                    }
+                    switch sortOrder {
+                    case .alphabetical:
+                        return Query(filter: filter, sort: \DBModel.Country.name)
+                    case .byPopulation:
+                        return Query(filter: filter, sort: \DBModel.Country.population, order: .reverse)
+                    }
                 })
                 .navigationTitle("Countries")
         }
@@ -68,6 +75,24 @@ struct CountriesList: View {
     @ViewBuilder private var permissionsButton: some View {
         if canRequestPushPermission {
             Button(action: requestPushPermission, label: { Text("Allow Push") })
+        }
+    }
+
+    private var sortButtonTitle: String {
+        switch sortOrder {
+        case .alphabetical:
+            return "Sort by Population"
+        case .byPopulation:
+            return "Sort Alphabetically"
+        }
+    }
+
+    private var sortButtonSystemImage: String {
+        switch sortOrder {
+        case .alphabetical:
+            return "person.3.sequence"
+        case .byPopulation:
+            return "textformat.abc"
         }
     }
 }
@@ -120,6 +145,12 @@ private extension CountriesList {
         }
         .toolbar {
             ToolbarItem {
+                Button(action: toggleSortOrder) {
+                    Label(sortButtonTitle, systemImage: sortButtonSystemImage)
+                }
+                .accessibilityIdentifier("SortOrderButton")
+            }
+            ToolbarItem {
                 permissionsButton
             }
         }
@@ -153,11 +184,25 @@ private extension CountriesList {
         injected.interactors.userPermissions
             .request(permission: .pushNotifications)
     }
+
+    private func toggleSortOrder() {
+        switch sortOrder {
+        case .alphabetical:
+            sortOrder = .byPopulation
+        case .byPopulation:
+            sortOrder = .alphabetical
+        }
+    }
 }
 
 // MARK: - Routing
 
 extension CountriesList {
+    enum SortOrder: Equatable {
+        case alphabetical
+        case byPopulation
+    }
+
     struct Routing: Equatable {
         var countryCode: String?
     }
