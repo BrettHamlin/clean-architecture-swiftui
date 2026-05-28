@@ -232,6 +232,19 @@ import Foundation
         #expect(byPopulation.map(\.name) == expectedPopulationNames)
     }
 
+    // harness:criterion=c-alphabetical-sort-uses-name-ascending,c-population-sort-uses-population-descending
+    @Test func sortModeDescriptorsOrderMockDataByExpectedFields() {
+        let alphabeticalNames = dbCountries
+            .sorted(using: CountriesList.SortMode.alphabetical.sortDescriptors)
+            .map(\.name)
+        let populationNames = dbCountries
+            .sorted(using: CountriesList.SortMode.byPopulation.sortDescriptors)
+            .map(\.name)
+
+        #expect(alphabeticalNames == apiCountries.sorted { $0.name < $1.name }.map(\.name))
+        #expect(populationNames == apiCountries.sorted { $0.population > $1.population }.map(\.name))
+    }
+
     // harness:criterion=c-search-with-alphabetical-sort-filters-correctly,c-search-with-population-sort-filters-correctly
     @Test func querySearchFiltersResultsInBothSortModes() async throws {
         let searchText = "an"

@@ -35,9 +35,9 @@ struct CountriesList: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             content
-                .query(searchText: searchText, results: $countries, sortMode: sortMode, { search, sortMode in
+                .query(searchText: searchText, results: $countries, sortMode: sortMode) { search, sortMode in
                     CountriesList.query(searchText: search, sortMode: sortMode)
-                })
+                }
                 .navigationTitle("Countries")
         }
         .modifier(LocaleReader(container: localeContainer))
@@ -71,6 +71,7 @@ struct CountriesList: View {
             Label(sortMode.toggleTitle, systemImage: sortMode.toggleSystemImage)
         }
         .accessibilityIdentifier("countries.sort.toggle")
+        .accessibilityValue(sortMode.accessibilityValue)
     }
 }
 
@@ -204,6 +205,15 @@ extension CountriesList {
                 return "arrow.down.circle"
             case .byPopulation:
                 return "textformat.abc"
+            }
+        }
+
+        var accessibilityValue: String {
+            switch self {
+            case .alphabetical:
+                return "Alphabetical"
+            case .byPopulation:
+                return "Population"
             }
         }
     }
