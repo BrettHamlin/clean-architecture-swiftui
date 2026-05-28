@@ -16,6 +16,7 @@ struct CountriesList: View {
     @State private(set) var countriesState: Loadable<Void>
     @State private var canRequestPushPermission: Bool = false
     @State internal var searchText = ""
+    @State internal var sortMode: SortMode = .alphabetical
     @State internal var navigationPath = NavigationPath()
     @State private var routingState: Routing = .init()
     private var routingBinding: Binding<Routing> {
@@ -34,14 +35,8 @@ struct CountriesList: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             content
-                .query(searchText: searchText, results: $countries, { search in
-                    Query(filter: #Predicate<DBModel.Country> { country in
-                        if search.isEmpty {
-                            return true
-                        } else {
-                            return country.name.localizedStandardContains(search)
-                        }
-                    }, sort: \DBModel.Country.name)
+                .query(searchText: searchText, results: $countries, sortMode: sortMode, { search, sortMode in
+                    CountriesList.query(searchText: search, sortMode: sortMode)
                 })
                 .navigationTitle("Countries")
         }
@@ -69,6 +64,13 @@ struct CountriesList: View {
         if canRequestPushPermission {
             Button(action: requestPushPermission, label: { Text("Allow Push") })
         }
+    }
+
+    private var sortButton: some View {
+        Button(action: toggleSortMode) {
+            Label(sortMode.toggleTitle, systemImage: sortMode.toggleSystemImage)
+        }
+        .accessibilityIdentifier("countries.sort.toggle")
     }
 }
 
@@ -120,6 +122,9 @@ private extension CountriesList {
         }
         .toolbar {
             ToolbarItem {
+                sortButton
+            }
+            ToolbarItem {
                 permissionsButton
             }
         }
@@ -153,13 +158,68 @@ private extension CountriesList {
         injected.interactors.userPermissions
             .request(permission: .pushNotifications)
     }
+
+    private func toggleSortMode() {
+        sortMode = sortMode.next
+    }
 }
 
 // MARK: - Routing
 
 extension CountriesList {
+    enum SortMode: CaseIterable, Equatable {
+        case alphabetical
+        case byPopulation
+
+        var next: SortMode {
+            switch self {
+            case .alphabetical:
+                return .byPopulation
+            case .byPopulation:
+                return .alphabetical
+            }
+        }
+
+        var sortDescriptors: [SortDescriptor<DBModel.Country>] {
+            switch self {
+            case .alphabetical:
+                return [SortDescriptor(\DBModel.Country.name, order: .forward)]
+            case .byPopulation:
+                return [SortDescriptor(\DBModel.Country.population, order: .reverse)]
+            }
+        }
+
+        var toggleTitle: String {
+            switch self {
+            case .alphabetical:
+                return "Sort by Population"
+            case .byPopulation:
+                return "Sort Alphabetically"
+            }
+        }
+
+        var toggleSystemImage: String {
+            switch self {
+            case .alphabetical:
+                return "arrow.down.circle"
+            case .byPopulation:
+                return "textformat.abc"
+            }
+        }
+    }
+
     struct Routing: Equatable {
         var countryCode: String?
+    }
+
+    static func query(searchText: String, sortMode: SortMode) -> Query<DBModel.Country, [DBModel.Country]> {
+        Query(filter: #Predicate<DBModel.Country> { country in
+            if searchText.isEmpty {
+                return true
+            } else {
+                return country.name.localizedStandardContains(searchText)
+            }
+        }, sort: sortMode.sortDescriptors)
     }
 }
 
