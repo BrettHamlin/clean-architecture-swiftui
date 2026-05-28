@@ -306,6 +306,28 @@ import SwiftUI
             }
         }
     }
+
+    @Test func deepLinkRoutingWorksWithPopulationSort() async throws {
+        //harness:criterion=c-navigation-unaffected
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        try await dbRepository.store(countries: apiCountries)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.actualView().sortOrder = .populationDescending
+                container.appState[\.routing.countriesList.countryCode] = "CAN"
+            }
+            try await sut.inspection.inspect(after: .seconds(0.1)) { view in
+                let actualView = try view.actualView()
+                #expect(actualView.sortOrder == .populationDescending)
+                #expect(!actualView.navigationPath.isEmpty)
+                container.interactors.verify()
+            }
+        }
+    }
     
     @Test func countriesFailed() async throws {
         let container = DIContainer(interactors: .mocked())

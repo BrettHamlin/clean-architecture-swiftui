@@ -109,6 +109,7 @@ struct CountriesList: View {
 
     private var sortButton: some View {
         Button(action: toggleSortOrder, label: { Text(sortOrder.toggleTitle) })
+            .accessibilityIdentifier("sortOrderToggle")
     }
 }
 
