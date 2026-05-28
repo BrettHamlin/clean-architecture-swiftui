@@ -36,6 +36,15 @@ struct CountriesList: View {
                 return "Sort Alphabetically"
             }
         }
+
+        var toggled: SortOrder {
+            switch self {
+            case .alphabetical:
+                return .populationDescending
+            case .populationDescending:
+                return .alphabetical
+            }
+        }
     }
 
     @State private var countries: [DBModel.Country] = []
@@ -189,7 +198,7 @@ private extension CountriesList {
     }
 
     private func toggleSortOrder() {
-        sortOrder = sortOrder == .alphabetical ? .populationDescending : .alphabetical
+        sortOrder = sortOrder.toggled
     }
 }
 

@@ -195,21 +195,52 @@ import SwiftUI
         }
     }
 
+    @Test func populationSortUsesNameTieBreaker() async throws {
+        //harness:criterion=c-population-sort-descriptor
+        let container = DIContainer(interactors: .mocked())
+        let sut = CountriesList(state: .loaded(()))
+        let modelContainer = ModelContainer.mock
+        let dbRepository = MainDBRepository(modelContainer: modelContainer)
+        let countriesWithPopulationTie = [
+            ApiModel.Country(name: "United States", translations: [:], population: 125000000, flag: nil, alpha3Code: "USA"),
+            ApiModel.Country(name: "Beta", translations: [:], population: 50000000, flag: nil, alpha3Code: "BET"),
+            ApiModel.Country(name: "Alpha", translations: [:], population: 50000000, flag: nil, alpha3Code: "ALP")
+        ]
+        try await dbRepository.store(countries: countriesWithPopulationTie)
+        let view = sut.inject(container).modelContainer(modelContainer)
+        try await ViewHosting.host(view) {
+            try await sut.inspection.inspect { view in
+                try view.actualView().sortOrder = .populationDescending
+            }
+            try await sut.inspection.inspect(after: .seconds(0.1)) { view in
+                let countryCodes = try view.content().countries().map(\.alpha3Code)
+                #expect(countryCodes == ["USA", "ALP", "BET"])
+                container.interactors.verify()
+            }
+        }
+    }
+
     @Test func queryViewContainerEqualityIncludesSort() {
         //harness:criterion=c-query-container-equality-includes-sort,c-query-search-generic
-        let builder: (String) -> Query<DBModel.Country, [DBModel.Country]> = { _ in
+        let alphabeticalBuilder: (String) -> Query<DBModel.Country, [DBModel.Country]> = { _ in
             Query(sort: [SortDescriptor(\DBModel.Country.name, order: .forward)])
+        }
+        let populationBuilder: (String) -> Query<DBModel.Country, [DBModel.Country]> = { _ in
+            Query(sort: [
+                SortDescriptor(\DBModel.Country.population, order: .reverse),
+                SortDescriptor(\DBModel.Country.name, order: .forward)
+            ])
         }
         let alphabetical = QueryViewContainer(
             searchText: "",
             sortID: CountriesList.SortOrder.alphabetical,
-            builder: builder,
+            builder: alphabeticalBuilder,
             results: { _, _ in }
         )
         let populationDescending = QueryViewContainer(
             searchText: "",
             sortID: CountriesList.SortOrder.populationDescending,
-            builder: builder,
+            builder: populationBuilder,
             results: { _, _ in }
         )
         #expect(alphabetical != populationDescending)
@@ -240,7 +271,7 @@ import SwiftUI
         let dbRepository = MainDBRepository(modelContainer: modelContainer)
         try await dbRepository.store(countries: apiCountries)
         let view = sut.inject(container).modelContainer(modelContainer)
-        let searchText = "e"
+        let searchText = "n"
         let matchingCountries = dbCountries.filter { $0.name.localizedStandardContains(searchText) }
         let alphabeticalIDs = matchingCountries.sorted(by: { $0.name < $1.name }).map(\.alpha3Code)
         let populationIDs = matchingCountries
@@ -251,6 +282,8 @@ import SwiftUI
                 return lhs.population > rhs.population
             }
             .map(\.alpha3Code)
+        #expect(alphabeticalIDs == ["CAN", "USA"])
+        #expect(populationIDs == ["USA", "CAN"])
 
         try await ViewHosting.host(view) {
             try await sut.inspection.inspect { view in
