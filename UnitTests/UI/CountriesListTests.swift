@@ -145,9 +145,11 @@ import Foundation
         try await ViewHosting.host(view) {
             try await sut.inspection.inspect { view in
                 let sortButton = try view.sortToggleButton()
+                let sortIdentifier = try sortButton.accessibilityIdentifier()
                 let sortTitle = try sortButton.labelView().find(ViewType.Text.self).string()
                 let permissionsButton = try view.find(button: "Allow Push")
                 let permissionsTitle = try permissionsButton.labelView().text().string()
+                #expect(sortIdentifier == "countries.sort.toggle")
                 #expect(sortTitle == "Sort by Population")
                 #expect(permissionsTitle == "Allow Push")
                 container.interactors.verify()
